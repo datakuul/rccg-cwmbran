@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,6 +10,8 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { FormError } from "@/components/ui/FormError";
+import { submitForm } from "@/lib/submitForm";
 
 const interests = [
   "I'm new and want to connect",
@@ -29,18 +32,25 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export function ConnectCardForm() {
+  const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting, isSubmitSuccessful },
+    formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
-  async function onSubmit(_data: FormValues) {
-    void _data;
-    await new Promise((r) => setTimeout(r, 600));
+  async function onSubmit(data: FormValues) {
+    setFailed(false);
+    try {
+      await submitForm("connect", data);
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   }
 
-  if (isSubmitSuccessful) {
+  if (done) {
     return (
       <div
         role="status"
@@ -98,6 +108,11 @@ export function ConnectCardForm() {
           <Textarea {...p} {...register("message")} rows={4} placeholder="Anything else?" />
         )}
       </FormField>
+      {failed ? (
+        <div className="sm:col-span-2">
+          <FormError />
+        </div>
+      ) : null}
       <div className="sm:col-span-2">
         <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
           {isSubmitting ? "Sending…" : "Send"}

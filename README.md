@@ -57,9 +57,18 @@ src/
 
 ## Forms
 
-Plan-a-visit, prayer-request, and connect/serve forms are accessible and show a success
-state, but **do not send data yet** (v1). To wire them up, add a Next.js Route Handler
-(e.g. `src/app/api/contact/route.ts`) and `POST` from the form's `onSubmit`.
+Plan-a-visit, prayer-request, and connect/serve forms POST to the
+`src/app/api/contact/route.ts` Route Handler, which **emails each submission to the
+church inbox** via [Resend](https://resend.com). Forms validate with Zod and show
+success and error states.
+
+- **Production:** set `RESEND_API_KEY`, `CONTACT_FROM_EMAIL`, and (optionally)
+  `CONTACT_EMAIL` — see [Form email delivery](#form-email-delivery-required-for-live-forms).
+- **Local dev without a key:** the form still shows success, and the submission is
+  logged to the server console instead of being emailed (nothing breaks).
+
+The recipient defaults to the `email` in `src/data/site.ts`; the sender's email
+(`email`) is set as the message **reply-to**, so replying goes straight back to them.
 
 ## Giving
 
@@ -142,10 +151,24 @@ of the box.
 5. **Deploy.** Vercel builds on every push. Pushes to your main branch publish to
    Production; other branches/PRs get Preview URLs automatically.
 6. **Add your custom domain** (Project → Settings → Domains): enter
-   `rccgcwmbran.co.uk`, then at your registrar add the DNS records Vercel shows
-   (usually an `A` record to Vercel's IP for the apex and a `CNAME` to
-   `cname.vercel-dns.com` for `www`). HTTPS certificates are issued automatically.
-   After the domain is live, update `NEXT_PUBLIC_SITE_URL` to match and redeploy.
+   `rccgcwmbran.co.uk`. Vercel then shows the DNS records to add — typically an `A`
+   record for the apex (`@`) and a `CNAME` for `www` → `cname.vercel-dns.com`. Use the
+   exact values Vercel displays (its apex IP has changed over time). HTTPS certificates
+   are issued automatically. After the domain is live, update `NEXT_PUBLIC_SITE_URL` to
+   match and redeploy.
+
+   **Namecheap note:** there are two valid setups — pick one, don't mix them:
+   - **Manage DNS at Namecheap (recommended, simplest):** keep the nameservers on
+     **Namecheap BasicDNS** (the default), then add Vercel's `A` and `CNAME` records
+     under the **Advanced DNS** tab. For the apex, Namecheap also offers an
+     `ALIAS` record type if you prefer it over the `A` record.
+   - **Delegate DNS to Vercel:** set Namecheap to **Custom DNS** and enter Vercel's
+     nameservers; then manage all records inside Vercel (you would *not* add anything
+     under Advanced DNS).
+
+   **You do not need Cloudflare.** If you ever route DNS through Cloudflare, set the
+   records to **DNS-only ("grey cloud")**, not proxied, to avoid SSL/caching conflicts
+   with Vercel.
 
 ### Post-deploy checklist
 
@@ -164,14 +187,30 @@ Verify these load correctly on the live domain:
 - **Google Analytics:** set `NEXT_PUBLIC_GA_ID` (see `.env.example`) and add the GA
   script via `next/script` in `src/app/layout.tsx`.
 
-### Wiring up form delivery (optional, later)
+### Form email delivery (required for live forms)
 
-To make the forms actually send submissions:
+The form-to-email pipeline is already built (`src/app/api/contact/route.ts` using
+[Resend](https://resend.com)). To make submissions actually arrive in an inbox:
 
-1. Add an email/webhook provider — e.g. [Resend](https://resend.com) (simple
-   transactional email) — and set its API key as an env var (`RESEND_API_KEY`, already
-   stubbed in `.env.example`).
-2. Add a Route Handler, e.g. `src/app/api/contact/route.ts`, that reads the request and
-   sends the email.
-3. `POST` to it from the relevant form's `onSubmit` (the forms are already structured
-   for this — they currently just simulate success).
+1. **Create a Resend account** (free tier is generous) and **verify your sending
+   domain** (e.g. `rccgcwmbran.co.uk`) — Resend gives you a few DNS records (SPF/DKIM)
+   to add at your registrar. You can only send "from" a verified domain.
+2. **Create an API key** in Resend.
+3. **Set these environment variables** in Vercel (Production + Preview):
+
+   ```
+   RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
+   CONTACT_FROM_EMAIL=Overcomers House <noreply@rccgcwmbran.co.uk>
+   CONTACT_EMAIL=hello@rccgcwmbran.co.uk          # inbox that receives submissions (optional)
+   ```
+
+   - `CONTACT_FROM_EMAIL` **must** be on your Resend-verified domain.
+   - `CONTACT_EMAIL` is who receives the submissions; if omitted it defaults to the
+     `email` in `src/data/site.ts`.
+   - The visitor's email is set as **reply-to**, so you can reply to them directly.
+
+4. **Redeploy.** Submit a test from `/contact` and confirm the email arrives.
+
+> Until `RESEND_API_KEY` is set, forms still show a success message but submissions are
+> only logged to the server console — so nothing is lost, but nothing is emailed either.
+> No database is needed; Resend handles delivery.

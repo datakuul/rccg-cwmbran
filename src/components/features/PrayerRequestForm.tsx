@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,6 +9,8 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
+import { FormError } from "@/components/ui/FormError";
+import { submitForm } from "@/lib/submitForm";
 
 const schema = z.object({
   name: z.string().optional(),
@@ -23,18 +26,25 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export function PrayerRequestForm() {
+  const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting, isSubmitSuccessful },
+    formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
-  async function onSubmit(_data: FormValues) {
-    void _data;
-    await new Promise((r) => setTimeout(r, 600));
+  async function onSubmit(data: FormValues) {
+    setFailed(false);
+    try {
+      await submitForm("prayer", data);
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   }
 
-  if (isSubmitSuccessful) {
+  if (done) {
     return (
       <div
         role="status"
@@ -91,6 +101,8 @@ export function PrayerRequestForm() {
         />
         Please keep this request confidential to the pastoral team.
       </label>
+
+      {failed ? <FormError /> : null}
 
       <div>
         <Button type="submit" size="lg" disabled={isSubmitting}>
